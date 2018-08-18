@@ -435,7 +435,7 @@ void* thread(void* arg)
 
 int main()
 {
-
+    daemon(1,1);
 
     int fd=http_strat();
     if(fd<0)
