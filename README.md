@@ -1,4 +1,5 @@
-# http_server
+# http_server    IP 188.131.132.252:8080  
+
 An http_server that can response the request of GET  and POST. 
 
 The first versions just can response an static html page of GET without parameter.
