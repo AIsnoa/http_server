@@ -1,9 +1,11 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<signal.h>
 #include<unistd.h>
 #include<string.h>
 #include<arpa/inet.h>
 #include<sys/types.h>
+#include<sys/wait.h>
 #include<sys/stat.h>
 #include<fcntl.h>
 #include<sys/socket.h>
@@ -63,12 +65,20 @@ int http_strat()
 
 void get_line(int64_t socket,char* buf)
 {     
+        printf("in get line\n");
+        printf("the socket is %d\n",(int)socket);
         int i=0;
-
+        int ret=0;
         while(1)
-        {
-            char c;
-            recv(socket,&c,1,0);
+        {   
+            char c='\0';
+            ret=recv(socket,&c,1,0);
+            if(ret<=0)
+            {
+              printf("%d recv error\n",(int)socket);
+              pthread_exit(NULL);
+            }
+
             if(c=='\r')
             {
                 recv(socket,&c,1,MSG_PEEK);
@@ -81,7 +91,7 @@ void get_line(int64_t socket,char* buf)
                     c='\n';
                 }
             } 
-            
+
             buf[i]=c;
             if(c=='\n')
             {
@@ -93,7 +103,9 @@ void get_line(int64_t socket,char* buf)
 
 void parse_first_line(int64_t new_sock,Http_Header * header)
 {
+    
     get_line(new_sock,header->Fist_line);
+    printf("after get line\n");
     int i=0;
     while(i<SIZE)
     {
@@ -121,6 +133,7 @@ void parse_first_line(int64_t new_sock,Http_Header * header)
 
     }
     i=0;
+    
     while(header->url[i]!='\0')
     {
 
@@ -171,6 +184,7 @@ void get_the_body(int64_t  new_sock,Http_Header* header)
 
 void parse_header(int64_t new_sock,Http_Header * header)
 {
+     
      parse_first_line(new_sock,header);
      printf("after parse_first_line\n"); 
      get_the_body(new_sock,header);
@@ -270,7 +284,13 @@ int  CGI_Handle(int64_t new_sock,Http_Header* header,char* url)
     {
       close(child_read);
       close(child_write);
-      waitpid(pid,NULL,0);
+      int ret=waitpid(pid,NULL,0);
+      if(ret==-1)
+      {
+           printf("waitpid faile\n");
+           return 1;
+      }
+       
       printf("wait pid successful.\n"); 
       
       char buff[100]={0};
@@ -280,9 +300,10 @@ int  CGI_Handle(int64_t new_sock,Http_Header* header,char* url)
       sprintf(body,"<header><meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\"></header> <h1>The result is %s.</h1>",buff);
       
       char content_length[100]={0}; 
-      sprintf(content_length,"Content-Length: %d\n",strlen(body));
+      sprintf(content_length,"Content-Length: %d\n",(int)strlen(body));
 
       write(new_sock,"HTTP/1.1 200 OK\n",strlen("HTTP/1.1 200 OK\n"));
+
       write(new_sock,content_length,strlen(content_length));
       write(new_sock,"\n",strlen("\n"));
       
@@ -309,11 +330,12 @@ int  CGI_Handle(int64_t new_sock,Http_Header* header,char* url)
 
 
 
+
 void ConnectRequest(int64_t new_sock)
 {
+       
        printf("in content request\n");
        int  errcode=0;
-       char body[SIZE]={0};
        char url[SIZE]={0};
       
        Http_Header header;
@@ -334,7 +356,7 @@ void ConnectRequest(int64_t new_sock)
            strcat(url,HOME_PAGE);
        }
         printf("%s\n",url); 
-       struct stat st;
+        struct stat st;
       
        if(stat(url,&st)<0)
        {
@@ -363,11 +385,22 @@ void ConnectRequest(int64_t new_sock)
                 sprintf(content_length,"Content-Length: %d\n",(int)st.st_size);
 
                 write(new_sock,"HTTP/1.1 200 OK\n",strlen("HTTP/1.1 200 OK\n"));
+                
+                if( strcasecmp(&header.url[strlen(header.url)-3],"jpg")==0)
+                {
+                  printf("in jpg request\n");
+                  write(new_sock,"Content-Type: image/jpg\n",strlen("Content-Type: image/jpg\n"));
+                }
+                else
+                {
+                   printf("in html request\n");
+                   write(new_sock,"Content-Type: text/html;charset:utf-8;\n",strlen("Content-Type: text/html;charset:utf-8;\n"));
+                }
+                
                 write(new_sock,content_length,strlen(content_length));
                 write(new_sock,"\n",strlen("\n"));
               
-                sendfile(new_sock,fd,NULL,st.st_size);
-               
+                sendfile(new_sock,fd,NULL,st.st_size); 
                 printf("after write body\n");
 
              }
@@ -420,22 +453,35 @@ END:
            write(new_sock,buff,strlen(buff));
        }
 
+       close(new_sock);
        printf("///////////////One Thread end!//////////////////\n");       
 }
 
-
 void* thread(void* arg)
 {
+//   signal(SIGPIPE ,SIG_IGN);
    int64_t new_sock=(int64_t)arg;
    printf("pthread create\n");
-   ConnectRequest(new_sock);
+
+//   char c='\0';
+//   recv(new_sock,&c,1,MSG_PEEK);
+//   if(c=='G'|| c=='P')
+//   { 
+//     printf("c:%c\n",c); 
+     ConnectRequest(new_sock);
+//   }
+//   else
+//   {
+//     printf("error header %d\n",(int)new_sock);
+//   }
    return NULL;
 }
 
 
 int main()
 {
-    daemon(1,1);
+
+//    daemon(1,1); 
 
     int fd=http_strat();
     if(fd<0)
@@ -454,10 +500,16 @@ int main()
             perror("accept");
             continue;
         }
+        int ret;        
+        printf("get a new connect %d\n",(int)new_sock);
         
         pthread_t tid;
-        pthread_create(&tid,NULL,thread,(void*)new_sock);
-        
+        ret= pthread_create(&tid,NULL,thread,(void*)new_sock);
+        if(ret!=0)
+        {
+           perror("pthread_create");
+           continue;
+        }
         pthread_detach(tid);
         
     }
