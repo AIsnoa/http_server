@@ -1,8 +1,11 @@
 # http_server    
 # IP 188.131.132.252:8080  
 
-An http_server that can response the request of GET  and POST. 
+概述：一个可以接受GET和POST请求的http服务器。
 
-The first versions just can response an static html page of GET without parameter.
+version1.0 可以显示文字和图片。
 
-The second versions can respose an static html page and get the input and output the result.(using cgi process).
+version2.0 可以接受用户提交的两个数据，并做加法计算返回到网页上。（发现只有360和chrome浏览器可以访问）
+
+version2.1 修复了运行中出现的一些bug。（现在所有浏览器均可访问）
+
