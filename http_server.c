@@ -39,8 +39,10 @@ int http_strat()
           perror("sock");
           return -1;
       }
-       int opt;
-       setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt));
+      
+        int opt;
+        setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt));
+
        struct sockaddr_in addr;
        addr.sin_family=AF_INET;
        addr.sin_addr.s_addr=inet_addr(IP);
@@ -214,7 +216,7 @@ int  CGI_Handle(int64_t new_sock,Http_Header* header,char* url)
 
     int father_read=fd2[0];
     int child_write=fd2[1];
-     
+   
     //处理header里body空间的内容，如果有的话.
     if(header->method=="GET" && header->content_length>0)
     {
@@ -228,27 +230,8 @@ int  CGI_Handle(int64_t new_sock,Http_Header* header,char* url)
    
     printf("putenv\n");
 
-    char method[10]={"METHOD="};
-    strcat(method,header->method);
-    putenv(method);
-     
-    if(header->parameter!=NULL)
-    {
-        char query_string[1024]={"QUERY_STRING="};
-        strcat(query_string,header->parameter);
-        putenv(query_string);   
-    }
-
-    char content_length[1024]={0};
-    sprintf(content_length,"CONTENT_LENGTH=%d",header->content_length);
-    putenv(content_length);
     
-    char* a=getenv("METHOD");
-    char* b=getenv("QUERY_STRING");
-    char* c=getenv("CONTENT_LENGTH");
-    printf("%s\n",a);
-    printf("%s\n",b);
-    printf("%s\n",c);
+
     pid_t pid=fork();
 
     if(pid<0)
@@ -260,6 +243,22 @@ int  CGI_Handle(int64_t new_sock,Http_Header* header,char* url)
     {
         close(father_read);
         close(father_write);
+       
+        char method[10]={"METHOD="};
+        strcat(method,header->method);
+        putenv(method);
+         
+        if(header->parameter!=NULL)
+        {
+            char query_string[1024]={"QUERY_STRING="};
+            strcat(query_string,header->parameter);
+            putenv(query_string);   
+        }
+    
+        char content_length[1024]={0};
+        sprintf(content_length,"CONTENT_LENGTH=%d",header->content_length);
+        putenv(content_length);
+
         int ret; 
         ret=dup2(child_read,0);
         if(ret<0)
